@@ -1,0 +1,14 @@
+load(__DIR__ + "/libs/objdump.ajs");
+load(__DIR__ + "/libs/str.js");
+load(__DIR__ + "/libs/Object.eachWithIndex.js");
+
+console.show();
+console.clear();
+
+// By https://github.com/archimatetool/archi-scripting-plugin/wiki/jArchi-Quick-Start#the-current-selection
+
+$(selection).eachWithIndex((element, i, length) => {
+  console.log(`Selected element (${i}/${length}) dump: ${str(element)}, concept:${str(element.concept)}:\n` + objdump(element, 0, /^(set|(toString|equals|hashCode|compareTo|getFontName|getFontColor|delete|getStyle|getFontSize|getFontStyle|getLineWidth|getTextPosition|getTextAlignment|deleteAllBendpoints|deleteBendpoint|addRelativeBendpoint|getLineColor|removeProp)$)/));
+});
+
+console.log("End of script");

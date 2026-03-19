@@ -1,0 +1,25 @@
+/*
+ * From https://github.com/archimatetool/archi/wiki/Archi-4.7-(or-superior)-can't-save-a-model-or-(if-using-coArchi)-can't-import,-refresh-or-publish-a-model-but-instead-gives-%22Error-in-model%22
+ * Doc: https://github.com/archimatetool/archi-scripting-plugin/wiki/jArchi-Quick-Start
+ */
+
+console.show();
+console.clear();
+
+$('view').find('relationship').each(function(connection) {
+  var relation = connection.concept;
+  var relationSource = relation.source;
+  var relationTarget = relation.target;
+
+  var connectionSource = connection.source.concept;
+  var connectionTarget = connection.target.concept;
+
+  if (connectionSource.id != relationSource.id || connectionTarget.id != relationTarget.id) {
+    // Another approach could be to create another model relationship and to add it to the view instead of the unvalid one (more complicated to implement)
+    console.log("In view \'", connection.view, "' : Visual connection", relation.type, " with id=", relation.id, " from ", connectionSource.type, " '", connectionSource.name, "' to ", connectionTarget.type, " '", connectionTarget.name, "' does not match underlying model relationship");
+    // One way to solve the issue is to delete the visual connection:
+    // connection.delete();
+  }
+});
+
+console.log("End of validation");

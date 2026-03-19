@@ -1,0 +1,10 @@
+{
+    "compilerOptions": {
+        "checkJs": true,
+        "alwaysStrict": true,
+        "target": "es2020"
+    },
+    "exclude": [
+        "lib.dom.d.ts"
+    ]
+}

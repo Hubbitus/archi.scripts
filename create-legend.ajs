@@ -1,0 +1,249 @@
+/**
+* Create Legend for Relations
+*
+* Creates a legend of all labeled relations on the view containing the selected Note element.
+*
+* Usage:
+* 1. Select a Note element on a view
+* 2. Run this script (File → Run Script... → create-legend.ajs)
+* 3. The Note's label will be updated with the legend
+*
+* Debug mode:
+* - Set DEBUG_ELEMENT_ID to a Note element ID to test without selection
+*
+* @author Pavel Alexeev
+**/
+
+console.show();
+console.clear();
+
+// DEBUG MODE: Set a Note element ID here to test without selection
+// Leave as null to use selection mode
+var DEBUG_ELEMENT_ID = null;  // e.g., "id-53078dee8c0448dbb8ce3fb6b2e97250"
+
+// Get selected element - prefer DEBUG_ELEMENT_ID if set, otherwise use selection
+var selectedObject = null;
+
+if (DEBUG_ELEMENT_ID && DEBUG_ELEMENT_ID.length > 0) {
+    // Debug mode: find element by ID
+    selectedObject = model.getObjectById(DEBUG_ELEMENT_ID);
+    if (!selectedObject) {
+        console.log("❌ Ошибка: Не найден элемент с ID: " + DEBUG_ELEMENT_ID);
+    } else {
+        console.log("Режим отладки: Используем элемент ID " + DEBUG_ELEMENT_ID);
+    }
+} else if (typeof selection !== 'undefined' && selection !== null && selection.length > 0) {
+    // Normal mode: use selection
+    if (selection.length > 1) {
+        console.log("❌ Ошибка: Выберите только один Note элемент!");
+    } else {
+        selectedObject = selection.first();
+    }
+} else {
+    console.log("❌ Ошибка: Выберите Note элемент!");
+}
+
+if (selectedObject) {
+    // Check if it's a Note (visual type is "diagram-model-note")
+    if (selectedObject.type != "diagram-model-note") {
+        console.log("❌ Ошибка: Выделенный элемент не является Note! Тип: " + selectedObject.type);
+    } else {
+        // Find the view containing this Note by searching all views
+        var view = null;
+        $('view').each(function(v) {
+            $(v).children().each(function(child) {
+                if (child.id == selectedObject.id) {
+                    view = v;
+                    return;
+                }
+            });
+            if (view) return;
+        });
+
+        if (!view) {
+            console.log("❌ Ошибка: Не удалось найти view, содержащий этот Note!");
+        } else {
+            console.log("✓ Вид: " + view.name);
+
+            // Get all connections from view children
+            var connections = [];
+            $(view).children().each(function(child) {
+                if (child.type.indexOf("relationship") >= 0 || child.type.indexOf("connection") >= 0) {
+                    connections.push(child);
+                }
+            });
+            console.log("Всего connections: " + connections.length);
+
+            // Build parent map for detecting visual nesting
+            var parentMap = {};
+            $(view).children().each(function(child) {
+                var parent = child.parent;
+                if (parent && parent instanceof DiagramModelObject) {
+                    parentMap[child.id] = parent.id;
+                }
+            });
+
+            // Filter to only explicit arrows (not visual nesting)
+            var explicitConnections = [];
+            for (var i = 0; i < connections.length; i++) {
+                var conn = connections[i];
+                var source = conn.source;
+                var target = conn.target;
+
+                if (!source || !target) continue;
+
+                // Check if target is nested inside source, or source inside target
+                var targetParent = parentMap[target.id];
+                var sourceParent = parentMap[source.id];
+
+                var isNested = (targetParent == source.id) || (sourceParent == target.id);
+
+                if (!isNested) {
+                    explicitConnections.push(conn);
+                }
+            }
+
+            console.log("Явных стрелок (после фильтрации): " + explicitConnections.length);
+
+            // Collect relations with labels
+            var legendMap = {};  // name -> description (for detecting duplicates)
+            var duplicateNames = {};  // name -> list of descriptions
+
+            for (var i = 0; i < explicitConnections.length; i++) {
+                var conn = explicitConnections[i];
+                var concept = conn.concept;
+                if (concept) {
+                    var name = concept.name ? concept.name.trim() : "";
+                    var description = concept.documentation ? concept.documentation.trim() : "";
+
+                    if (name && name.length > 0) {
+                        // Check for duplicates
+                        if (legendMap.hasOwnProperty(name)) {
+                            // This is a duplicate name
+                            if (!duplicateNames.hasOwnProperty(name)) {
+                                duplicateNames[name] = [legendMap[name]];
+                            }
+                            duplicateNames[name].push(description);
+                        }
+                        legendMap[name] = description;
+                    }
+                }
+            }
+
+            // Sort names lexicographically
+            var sortedNames = [];
+            for (var name in legendMap) {
+                if (legendMap.hasOwnProperty(name)) {
+                    sortedNames.push(name);
+                }
+            }
+            sortedNames.sort(function(a, b) {
+                return a.toLowerCase().localeCompare(b.toLowerCase());
+            });
+
+            // Build legend text with bullet points
+            var legendLines = ["Легенда связей:", ""];
+
+            for (var i = 0; i < sortedNames.length; i++) {
+                var name = sortedNames[i];
+                var description = legendMap[name];
+
+                if (description && description.length > 0) {
+                    // Has description: "➤ name description"
+                    // Split description into lines and indent continuation lines
+                    var descLines = description.split("\n");
+
+                    // First line: bullet + name + first line of description
+                    legendLines.push("➤ " + name + " " + descLines[0]);
+
+                    // Continuation lines: indent to align with first character of description (after bullet + name + space)
+                    var indent = " ".repeat(name.length + 3);  // ➤ + space + name + space
+                    for (var j = 1; j < descLines.length; j++) {
+                        legendLines.push(indent + descLines[j]);
+                    }
+                } else {
+                    // No description: bullet + name
+                    legendLines.push("➤ " + name);
+                }
+            }
+
+            var legendText = legendLines.join("\n");
+
+            // Update the Note's label
+            selectedObject.setText(legendText);
+
+            // Auto-resize Note height to fit all text (width stays the same)
+            var currentBounds = selectedObject.getBounds();
+
+            // Get actual font size from the Note
+            var fontSize = selectedObject.getFontSize() || 12;
+            var lineHeight = Math.round(fontSize * 2);  // Line height with spacing
+            var padding = Math.round(fontSize) + 10;    // Top + bottom padding
+
+            // Count ALL lines in the final text (including empty lines!)
+            var actualLines = legendText.split("\n").length;
+            var newHeight = (actualLines * lineHeight) + padding;
+
+            // Set new bounds (keep x, y, width; update height)
+            currentBounds.height = newHeight;
+            selectedObject.setBounds(currentBounds);
+
+            // Force refresh by also setting the text again
+            selectedObject.setText(legendText);
+
+            console.log("");
+            console.log("✓ Легенда обновлена!");
+            console.log("  Длина текста: " + legendText.length + " символов");
+            console.log("  Количество связей: " + sortedNames.length);
+            console.log("  Количество строк: " + actualLines);
+            console.log("  Высота Note: " + newHeight + "px (шрифт " + fontSize + "px)");
+            console.log("");
+            console.log("Предпросмотр (первые 200 символов):");
+            console.log(legendText.substring(0, Math.min(200, legendText.length)) + (legendText.length > 200 ? "..." : ""));
+
+            // Report duplicates with highlighted differences
+            var duplicateCount = 0;
+            if (Object.keys(duplicateNames).length > 0) {
+                console.log("");
+                console.log("⚠️ Дубликаты связей с одним именем и РАЗНЫМИ описаниями:");
+
+                for (var name in duplicateNames) {
+                    if (duplicateNames.hasOwnProperty(name)) {
+                        var descriptions = duplicateNames[name];
+                        // Get unique descriptions only
+                        var uniqueDescs = [];
+                        for (var i = 0; i < descriptions.length; i++) {
+                            var desc = descriptions[i];
+                            if (uniqueDescs.indexOf(desc) < 0) {
+                                uniqueDescs.push(desc);
+                            }
+                        }
+
+                        if (uniqueDescs.length > 1) {
+                            duplicateCount++;
+                            console.log("  🔴 '" + name + "':");
+                            for (var i = 0; i < uniqueDescs.length; i++) {
+                                var desc = uniqueDescs[i] ? uniqueDescs[i] : "(нет описания)";
+                                console.log("     " + (i + 1) + ". " + desc);
+                            }
+                            console.log("");
+                        }
+                    }
+                }
+            }
+
+            if (duplicateCount == 0) {
+                console.log("✅ Дубликаты имён с разными описаниями не найдены.");
+            }
+
+            // Summary
+            console.log(`
+═══════════════════════════════════════════════════════════════
+Сводка:
+➤ Всего связей:${explicitConnections.length}
+➤ Явных стрелок (исключая вложения): ${sortedNames.length}${(duplicateCount > 0 ? "\n➤ ⚠️ дубликатов: " + duplicateCount : "")}
+═══════════════════════════════════════════════════════════════
+`);
+        }
+    }
+}

@@ -1,0 +1,77 @@
+load(__DIR__ + "/libs/objdump.ajs");
+load(__DIR__ + "/libs/str.js");
+load(__DIR__ + "/libs/Object.eachWithIndex.js");
+
+console.show();
+console.clear();
+
+function print_object(it, header='') {
+  console.log(`${header}Object ${str(it)}, concept=[${it.concept}], class=[${it.class}]
+  Dump:\n${objdump(it, 0, /^(set|(toString|prop|add|openInUI|createObject|isAllowedConceptForViewpoint|equals|hashCode|compareTo|getFontName|getFontColor|delete|getStyle|getFontSize|getFontStyle|getLineWidth|getTextPosition|getTextAlignment|deleteAllBendpoints|deleteBendpoint|addRelativeBendpoint|getLineColor|removeProp|createConnection|createViewReference|getViewpoint|getGradient|getFillColor|getImagePosition|getIconColor|getImageSource|getOpacity|getOutlineOpacity|getFigureType|getShowIcon|getLabelExpression|getLabelValue|isLabelVisible|getSpecialization)$)/).trim()}
+  Props: ${it?.prop()}
+  ---`);
+}
+
+function print_object_min(it, header='') {
+  // , class=[${it.class}]: like class com.archimatetool.script.dom.model.DiagramModelObjectProxy
+  console.log(`${header}Object ${str(it)}
+  source=${str(it.source)}, target=${str(it.target)}, concept=${str(it.concept)}`);
+}
+
+function print_view_child(it, header='') {
+  console.log(`${header}${str(it)}
+  view   =${str(it.view)},
+  concept=${str(it.concept)}
+    source=${str(it.source)},
+    target=${str(it.target)},
+      concept.source=${str(it.concept?.source)},
+      concept.target=${str(it.concept?.target)}
+  `);
+}
+
+function print_relation_min(it, header='') {
+  console.log(`${header}Relation id=[${it.id}], type=[${it.type}], name:[${it.name}], concept=[${it.concept}]
+  source=[${it.source}{${it.source.id}}],
+  target=[${it.target}{${it.target.id}}]`);
+}
+
+// Object of interest
+var obj = $('.VLAN DB-SRV-P').first()
+
+// print_object($('#id-5ec8da2fd4c7467bb68a2fa01ea344aa')); -- By ID
+print_object(obj, 'VLAN DB-SRV-P:') // By name
+// print_object($('.Technology_layer общая')) // By name
+
+// https://github.com/archimatetool/archi-scripting-plugin/wiki/jArchi-Collection
+print_object($('archimate-diagram-model.Technology_layer общая').first(), 'archimate-diagram-model.Technology_layer общая:') // By name
+console.log('=================');
+
+// $('.Technology_layer общая').children()
+// $('.DEVOPS-3027 Kafka for data TO-BE 2023').children()
+$('view').children()
+  .filter(it =>
+    it?.concept?.id == obj.id || it?.source?.id == obj.id || it?.target?.id == obj.id
+    // || it?.concept?.source?.id == obj.id || it?.concept?.target?.id == obj.id // $('.DEVOPS-3027 Kafka for data TO-BE 2023') requires that!
+  )
+  .eachWithIndex((child, i, length) => {
+    print_view_child(child, `child (${i}/${length}): `);
+});
+console.log('=================');
+
+
+$('.VLAN DB-SRV-P').viewRefs().eachWithIndex((ref, i, length) => {
+  print_view_child(ref, `.VLAN DB-SRV-P.viewRefs(${i}/${length}):`);
+});
+console.log('=================');
+
+//$('archimate-diagram-model.Technology_layer общая').find('relationship')
+// $('view').find('relationship').each(function(connection) {
+$('relationship')
+  .filter(connection => connection.source.id == obj.id || connection.target.id == obj.id)
+    .eachWithIndex((connection, i, length) => {
+      // print_object_min(connection);
+      var relation = connection.concept;
+      print_relation_min(connection, `Rel (${i}/${length}):`);
+  });
+
+console.log('End of script');
