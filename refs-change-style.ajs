@@ -1,0 +1,180 @@
+/**
+* Apply Styles to Labeled Visible Relations
+*
+* Applies visual styles (color, font) to all labeled visible relations on the view.
+*
+* Usage:
+* 1. Select any element on the target view (or set VIEW_NAME below)
+* 2. Run this script (File → Run Script... → refs-change-style.ajs)
+*
+* @author Pavel Alexeev
+**/
+
+console.show();
+console.clear();
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURATION - Edit these values to change the style
+// ═══════════════════════════════════════════════════════════════
+var STYLE_COLOR = "#9a9996";       // Line and text color (hex)
+var STYLE_FONT = "Sans Regular";     // Font family
+var STYLE_FONT_SIZE = 7;             // Font size in points
+
+// Optional: Set a specific view name to process (leave empty to use selection)
+var VIEW_NAME = "";  // e.g., "Единая платформа данных ГИД 2026-01"
+// ═══════════════════════════════════════════════════════════════
+
+// Find the view to process
+var view = null;
+
+if (VIEW_NAME && VIEW_NAME.length > 0) {
+    // Find view by name
+    $('view').each(function(v) {
+        if (v.name == VIEW_NAME) {
+            view = v;
+            return;
+        }
+    });
+
+    if (!view) {
+        console.log("❌ Ошибка: View не найден: " + VIEW_NAME);
+    } else {
+        console.log("✓ Вид (по имени): " + view.name);
+    }
+} else if (typeof selection !== 'undefined' && selection !== null && selection.length > 0) {
+    // Find view containing selected element
+    var selectedObject = selection.first();
+
+    // Check if selected object is the view itself
+    if (selectedObject.type === "archimate-diagram-model") {
+        view = selectedObject;
+        console.log("✓ Вид (выделена view): " + view.name);
+    } else {
+        // Find view containing the selected element
+        $('view').each(function(v) {
+            $(v).children().each(function(child) {
+                if (child.id == selectedObject.id) {
+                    view = v;
+                    return;
+                }
+            });
+            if (view) return;
+        });
+
+        if (!view) {
+            console.log("❌ Ошибка: Не удалось найти view, содержащий выделенный элемент!");
+        } else {
+            console.log("✓ Вид: " + view.name);
+        }
+    }
+} else {
+    console.log("❌ Ошибка: Выделите элемент на view или задайте VIEW_NAME в скрипте!");
+}
+
+if (view) {
+    console.log("");
+
+    // Get all connections from view children
+    var connections = [];
+    $(view).children().each(function(child) {
+        if (child.type.indexOf("relationship") >= 0 || child.type.indexOf("connection") >= 0) {
+            connections.push(child);
+        }
+    });
+    console.log("Всего connections: " + connections.length);
+
+    // Build parent map for detecting visual nesting
+    var parentMap = {};
+    $(view).children().each(function(child) {
+        var parent = child.parent;
+        if (parent && parent instanceof DiagramModelObject) {
+            parentMap[child.id] = parent.id;
+        }
+    });
+
+    // Filter to only explicit arrows (not visual nesting)
+    var explicitConnections = [];
+    for (var i = 0; i < connections.length; i++) {
+        var conn = connections[i];
+        var source = conn.source;
+        var target = conn.target;
+
+        if (!source || !target) continue;
+
+        // Check if target is nested inside source, or source inside target
+        var targetParent = parentMap[target.id];
+        var sourceParent = parentMap[source.id];
+
+        var isNested = (targetParent == source.id) || (sourceParent == target.id);
+
+        if (!isNested) {
+            explicitConnections.push(conn);
+        }
+    }
+
+    console.log("Явных стрелок (после фильтрации): " + explicitConnections.length);
+    console.log("");
+
+    // Collect relations with labels
+    var labeledConnections = [];
+
+    for (var i = 0; i < explicitConnections.length; i++) {
+        var conn = explicitConnections[i];
+        var concept = conn.concept;
+        if (concept) {
+            var name = concept.name ? concept.name.trim() : "";
+
+            if (name && name.length > 0) {
+                labeledConnections.push({
+                    connection: conn,
+                    name: name,
+                    type: concept.type
+                });
+            }
+        }
+    }
+
+    console.log("Связей с названиями: " + labeledConnections.length);
+    console.log("");
+
+    if (labeledConnections.length === 0) {
+        console.log("ℹ️ Нет связей с названиями для стилизации.");
+    } else {
+        // Apply styles to each labeled connection
+        console.log("Применяю стили:");
+        console.log("  Цвет: " + STYLE_COLOR);
+        console.log("  Шрифт: " + STYLE_FONT);
+        console.log("  Размер шрифта: " + STYLE_FONT_SIZE + "pt");
+        console.log("");
+
+        var styledCount = 0;
+
+        // Sort by name for nice output
+        labeledConnections.sort(function(a, b) {
+            return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+        });
+
+        for (var i = 0; i < labeledConnections.length; i++) {
+            var item = labeledConnections[i];
+            var conn = item.connection;
+
+            try {
+                // Apply styles
+                conn.lineColor = STYLE_COLOR;
+                conn.fontColor = STYLE_COLOR;
+                conn.fontName = STYLE_FONT;
+                conn.fontSize = STYLE_FONT_SIZE;
+
+                styledCount++;
+                console.log("  ✓ " + item.name + " (" + item.type + ")");
+            } catch (e) {
+                console.log("  ✗ " + item.name + " (ошибка: " + e.message + ")");
+            }
+        }
+
+        console.log("");
+        console.log("═══════════════════════════════════════════════════════════════");
+        console.log("✓ Готово! Стилизовано связей: " + styledCount + " из " + labeledConnections.length);
+        console.log("═══════════════════════════════════════════════════════════════");
+    }
+}
